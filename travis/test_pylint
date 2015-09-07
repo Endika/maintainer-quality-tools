@@ -1,23 +1,63 @@
-#!/bin/bash
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
-MODULES_TO_TEST=$TRAVIS_BUILD_DIR
-PYLINT_CONFIG_DIR="$(dirname $0)/cfg"
+"""
+Script to process pylint run and exit with result.
+"""
 
-# Fix pylint path. More info: https://www.mail-archive.com/code-quality@python.org/msg00294.html
-export PYTHONPATH=${PYTHONPATH}:${MODULES_TO_TEST}
-touch $MODULES_TO_TEST/__init__.py
+import os
 
-# Set openerp in global path to fix "import" from addons
-if [ "x${VERSION}" == "x" ] ; then
-    VERSION="${1}"
-    echo "WARNING: no env variable set for VERSION. Using '${1}'."
-fi
+import run_pylint
+import travis_helpers
 
-: ${ODOO_REPO:="odoo/odoo"}  # default value, if not set
-IFS="/" read -a REPO <<< "${ODOO_REPO}"
-export PATH=${PATH}:${PWD}/../${REPO[1]}-${VERSION}/openerp
+from getaddons import get_modules_changed
 
-#run pylint command
-pylint --rcfile=${PYLINT_CONFIG_DIR}/travis_run_pylint.cfg ${MODULES_TO_TEST}
-pylint_status=$?
-exit $((${pylint_status}))
+pylint_rcfile = os.path.join(
+    os.path.dirname(os.path.realpath(__file__)),
+    'cfg',
+    "travis_run_pylint.cfg")
+count_errors = run_pylint.main([
+    "--config-file=" + pylint_rcfile,
+], standalone_mode=False)
+
+
+pylint_rcfile_pr = os.path.join(
+    os.path.dirname(os.path.realpath(__file__)),
+    'cfg',
+    "travis_run_pylint_pr.cfg")
+
+is_pull_request = os.environ.get(
+    'TRAVIS_PULL_REQUEST', 'false') != 'false'
+branch_base = os.environ.get('TRAVIS_BRANCH', False)
+git_work_dir = os.environ.get('TRAVIS_BUILD_DIR', False)
+if is_pull_request and branch_base and git_work_dir:
+    modules_changed = get_modules_changed(
+        git_work_dir,
+        'origin/' + branch_base)
+    modules_changed_cmd = []
+    for module_changed in modules_changed:
+        modules_changed_cmd.extend([
+            '--path',
+            module_changed,
+        ])
+    count_errors += run_pylint.main([
+        "--config-file=" + pylint_rcfile_pr,
+    ] + modules_changed_cmd, standalone_mode=False)
+else:
+    # TODO: Add git hook case in other PR
+    pass
+
+expected_errors = int(
+    os.environ.get('PYLINT_EXPECTED_ERRORS', 0))
+
+exit_status = 0
+if count_errors == -1:
+    print(travis_helpers.yellow('Python modules not found'))
+elif count_errors != expected_errors:
+    print(travis_helpers.red("pylint expected errors {expected_errors}, "
+          "found {number_errors}!".format(
+              expected_errors=expected_errors,
+              number_errors=count_errors)))
+    exit_status = 1
+
+exit(exit_status)

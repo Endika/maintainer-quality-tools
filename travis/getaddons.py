@@ -9,15 +9,24 @@ from __future__ import print_function
 import os
 import sys
 
+from git_run import GitRun
+
+MANIFEST_FILES = ['__odoo__.py', '__openerp__.py', '__terp__.py']
+
 
 def is_module(path):
+    """return False if the path doesn't contain an odoo module, and the full
+    path to the module manifest otherwise"""
+
     if not os.path.isdir(path):
         return False
-    manifs = ['__openerp__.py', '__odoo__.py', '__terp__.py', '__init__.py']
     files = os.listdir(path)
-    filtered = [x for x in files if x in manifs]
-    res = len(filtered) == 2 and '__init__.py' in filtered
-    return res
+    filtered = [x for x in files if x in (MANIFEST_FILES + ['__init__.py'])]
+    if len(filtered) == 2 and '__init__.py' in filtered:
+        return os.path.join(
+            path, next(x for x in filtered if x != '__init__.py'))
+    else:
+        return False
 
 
 def get_modules(path):
@@ -48,11 +57,35 @@ def get_addons(path):
     return res
 
 
-if __name__ == "__main__":
-    params = sys.argv[1:]
+def get_modules_changed(path, ref='HEAD'):
+    '''Get modules changed from git diff-index {ref}
+    :param path: String path of git repo
+    :param ref: branch or remote/branch or sha to compare
+    :return: List of paths of modules changed
+    '''
+    git_run_obj = GitRun(os.path.join(path, '.git'))
+    git_run_obj.run(['fetch'] + ref.split('/'))
+    items_changed = git_run_obj.get_items_changed(ref)
+    folders_changed = set([
+        item_changed.split('/')[0]
+        for item_changed in items_changed
+        if '/' in item_changed]
+    )
+    modules = set(get_modules(path))
+    modules_changed = list(modules & folders_changed)
+    modules_changed_path = [
+        os.path.join(path, module_changed)
+        for module_changed in modules_changed]
+    return modules_changed_path
+
+
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv
+    params = argv[1:]
     if not params:
         print(__doc__)
-        sys.exit(1)
+        return 1
 
     list_modules = False
     exclude_modules = []
@@ -70,3 +103,6 @@ if __name__ == "__main__":
     if exclude_modules:
         res = [x for x in res if x not in exclude_modules]
     print(','.join(res))
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -2,6 +2,8 @@
 # Do not use this file as a template for you repository TravisCI configuration
 # Instead use the files under the "/sample_files" directory for that purpose.
 language: python
+sudo: false
+cache: pip
 
 python:
   - "2.7"
@@ -13,6 +15,7 @@ addons:
       - python-lxml  # because pip installation is slow
       - python-simplejson
       - python-serial
+      - python-yaml
 
 virtualenv:
   system_site_packages: true
@@ -28,7 +31,8 @@ env:
   - INCLUDE="test_module,second_module" UNIT_TEST="1"
   - VERSION="7.0" INCLUDE="test_module,second_module" ODOO_REPO="OCA/OCB"  # ODOO_REPO usage example
   - VERSION="6.1" INCLUDE="test_module,second_module"
-  - LINT_CHECK="1" TESTS="0"
+  - LINT_CHECK="1" TESTS="0" PYLINT_EXPECTED_ERRORS="17" TRAVIS_PULL_REQUEST="false" # Use main pylint config file
+  - LINT_CHECK="1" TESTS="0" PYLINT_EXPECTED_ERRORS="18" TRAVIS_PULL_REQUEST="true"  # Use PR pylint config file
 
 install:
   - cp -r ../maintainer-quality-tools/ $HOME
@@ -37,7 +41,8 @@ install:
   - travis_install_nightly 8.0 # only used if VERSION not set in env
 
 script:
-  - travis_run_tests 8.0  # only used if VERSION not set in env
+  - coverage run --append ./travis/self_tests
+  - coverage run --append ./travis/travis_run_tests 8.0  # only used if VERSION not set in env
 
-#after_success:
-#  coveralls
+after_success:
+  - coveralls
