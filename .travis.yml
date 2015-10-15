@@ -3,7 +3,10 @@
 # Instead use the files under the "/sample_files" directory for that purpose.
 language: python
 sudo: false
-cache: pip
+cache:
+  apt: true
+  directories:
+    - $HOME/.cache/pip
 
 python:
   - "2.7"
@@ -27,13 +30,14 @@ env:
 
   matrix:
   - INCLUDE="broken_module" SERVER_EXPECTED_ERRORS="1"  # test errors are detected
-  - EXCLUDE="broken_module" OPTIONS="--log-level=debug" INSTALL_OPTIONS="--log-level=info"
+  - EXCLUDE="broken_module,broken_lint" OPTIONS="--log-level=debug" INSTALL_OPTIONS="--log-level=info"
   - INCLUDE="test_module,second_module" UNIT_TEST="1"
   - VERSION="7.0" INCLUDE="test_module,second_module" ODOO_REPO="OCA/OCB"  # ODOO_REPO usage example
   - VERSION="6.1" INCLUDE="test_module,second_module"
   - LINT_CHECK="1" TESTS="0" PYLINT_EXPECTED_ERRORS="18" TRAVIS_PULL_REQUEST="false" # Use main pylint config file
-  - VERSION=master LINT_CHECK="1" TESTS="0" PYLINT_EXPECTED_ERRORS="18" TRAVIS_PULL_REQUEST="true"  # Use PR pylint config file
-  - VERSION="7.0" LINT_CHECK="1" TESTS="0" PYLINT_EXPECTED_ERRORS="18" TRAVIS_PULL_REQUEST="true"  # To check pylint_conf of PR's with old api
+  - VERSION=master LINT_CHECK="1" TESTS="0" PYLINT_EXPECTED_ERRORS="25" TRAVIS_PULL_REQUEST="true"  # Use PR pylint config file
+  - VERSION="7.0" LINT_CHECK="1" TESTS="0" PYLINT_EXPECTED_ERRORS="21" TRAVIS_PULL_REQUEST="true"  # To check pylint_conf of PR's with old api
+  - VERSION="" LINT_CHECK="1" TESTS="0" PYLINT_EXPECTED_ERRORS="18" TRAVIS_PULL_REQUEST="false"  # To check VERSION empty or unset case.
 
 install:
   - cp -r ../maintainer-quality-tools/ $HOME
@@ -47,4 +51,4 @@ script:
   - coverage run --append ./travis/travis_run_tests 8.0  # only used if VERSION not set in env
 
 after_success:
-  - coveralls
+  - TESTS="1" LINT_CHECK="0" travis_after_tests_success
