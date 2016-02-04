@@ -48,7 +48,7 @@ def get_modules(path):
         path = os.path.dirname(path)
 
     res = []
-    if os.path.isdir(path) and not os.path.basename(path)[0] == '.':
+    if os.path.isdir(path):
         res = [x for x in os.listdir(path)
                if is_installable_module(os.path.join(path, x))]
     return res
@@ -60,6 +60,8 @@ def is_addons(path):
 
 
 def get_addons(path):
+    if not os.path.exists(path):
+        return []
     if is_addons(path):
         res = [path]
     else:
@@ -76,7 +78,12 @@ def get_modules_changed(path, ref='HEAD'):
     :return: List of paths of modules changed
     '''
     git_run_obj = GitRun(os.path.join(path, '.git'))
-    git_run_obj.run(['fetch'] + ref.split('/'))
+    if ref != 'HEAD':
+        fetch_ref = ref
+        if ':' not in fetch_ref:
+            # to force create branch
+            fetch_ref += ':' + fetch_ref
+        git_run_obj.run(['fetch'] + fetch_ref.split('/', 1))
     items_changed = git_run_obj.get_items_changed(ref)
     folders_changed = set([
         item_changed.split('/')[0]

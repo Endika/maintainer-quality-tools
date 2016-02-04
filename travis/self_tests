@@ -1,11 +1,15 @@
 #!/usr/bin/env python
 
 import os
+import subprocess
+import threading
+import time
+import xmlrpclib
+
 import getaddons
 import travis_helpers
+from test_server import main as test_server_main
 from test_server import get_test_dependencies
-
-import run_pylint
 
 repo_dir = os.environ.get("TRAVIS_BUILD_DIR", "./tests/test_repo/")
 exclude = os.environ.get("EXCLUDE")
@@ -42,6 +46,7 @@ assert travis_helpers.yellow_light(u'\ntest\nnewline') == u"\033[33m\033[0;m\n\0
 # Testing empty paths and pylint_run fix of:
 # https://www.mail-archive.com/code-quality@python.org/msg00294.html
 if os.environ.get('LINT_CHECK', 0) == '1':
+    import run_pylint
     pylint_rcfile = os.path.join(
         os.path.dirname(os.path.realpath(__file__)),
         'cfg',
@@ -61,5 +66,56 @@ if os.environ.get('LINT_CHECK', 0) == '1':
         "--path", empty_path], standalone_mode=False)
     assert -1 == count_errors
 
+    if os.environ.get('TRAVIS_PULL_REQUEST', 'false') != 'false':
+        git_script_path = os.path.join(os.path.dirname(
+            os.path.dirname(os.path.realpath(__file__))), 'git')
+        pre_commit_returned = subprocess.call(os.path.join(
+            git_script_path, 'pre-commit'))
+        assert pre_commit_returned == 0, \
+            "Git pre-commit script returned value != 0"
+
+# Testing git get branch
+
+
 # Testing git run from getaddons
 getaddons.get_modules_changed(repo_dir)
+
+
+# Testing instance running
+def connection_test():
+    username = "admin"
+    password = "admin"
+    database_name = "openerp_test"
+    port = 8069
+    host = '127.0.0.1'
+    sock_common = xmlrpclib.ServerProxy(
+        "http://%s:%d/xmlrpc/common" % (host, port))
+    uid = sock_common.login(
+        database_name, username, password)
+    sock = xmlrpclib.ServerProxy(
+        "http://%s:%d/xmlrpc/object" % (host, port))
+    user_ids = sock.execute(
+        database_name, uid, password, 'res.users',
+        'search', [('login', '=', 'admin')])
+    return user_ids
+
+
+class TestServerThread(threading.Thread):
+    def run(self):
+        test_server_main()
+
+
+if os.environ.get('INSTANCE_ALIVE') == '1' and os.environ.get('TESTS') == '1':
+    thread = TestServerThread()
+    thread.daemon = True
+    thread.start()
+
+    for index in range(10):
+        try:
+            connection_result = connection_test()
+        except:
+            connection_result = None
+        if connection_result:
+            break
+        time.sleep(2)
+    assert None != connection_result, "Connection test failed"

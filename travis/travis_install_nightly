@@ -1,11 +1,29 @@
 #!/bin/bash
 
-pip install -q QUnitSuite flake8 coveralls Click oca-pylint-plugin pylint-mccabe > /dev/null 2>&1
+set -e
 
-# We can exit here and do nothing if this only a LINT check
-if [ "${LINT_CHECK}" == "1" ] ; then
+if [ "${LINT_CHECK}" != "0" ]; then
+    pip install -q flake8 Click pylint-mccabe
+
+    # Install pylint plugin depends without lxml
+    wget -q https://raw.githubusercontent.com/OCA/pylint-odoo/master/requirements.txt -O ${HOME}/maintainer-quality-tools/travis/pylint_odoo_requirements.txt
+    find -L ${HOME}/maintainer-quality-tools/travis -name pylint_odoo_requirements.txt -exec sed -i '/lxml/d'  {} \;  #  lxml depends is too slow
+    pip install --upgrade -r ${HOME}/maintainer-quality-tools/travis/pylint_odoo_requirements.txt
+    pip install --upgrade --pre --no-deps git+https://github.com/OCA/pylint-odoo.git   # To use last version ever
+    npm install -g jshint  # Extra package for pylint-odoo plugin
     exit 0
 fi
+
+# We can exit here and do nothing if this only a LINT check
+if [ "${TESTS}" != "1" ] && [ "${LINT_CHECK}" == "1" ]; then
+    exit 0
+fi
+
+
+# Install less
+ln -s `which nodejs` $HOME/maintainer-quality-tools/travis/node
+npm install -g less less-plugin-clean-css
+
 
 # For backward compatibility, take version from parameter if it's not globally set
 if [ "x${VERSION}" == "x" ] ; then
@@ -25,6 +43,7 @@ tar -xf odoo.tar.gz -C ${HOME}
 rm -f $VIRTUAL_ENV/lib/python2.7/no-global-site-packages.txt
 
 pip install --user -q -r $(dirname ${BASH_SOURCE[0]})/requirements.txt
+pip install -q QUnitSuite coveralls
 
 # Use reference .coveragerc
 cp ${HOME}/maintainer-quality-tools/cfg/.coveragerc .
@@ -38,8 +57,12 @@ clone_oca_dependencies
 #     |___ <OdooRepo>-<Branch>/         <-- Odoo Server
 #     |___ maintainer-quality-tools/
 #     |___ build/<Owner>/<TestedRepo>/
-#     |___ <DependencyRepo1>/
-#     |___ <DependencyRepo2>/
+#     |___ dependencies/<DependencyRepo1>/
+#     |___ dependencies/<DependencyRepo2>/
 #     |...
 echo "Content of ${HOME}:"
 ls -l ${HOME}
+echo "Content of ${HOME}/dependencies:"
+ls -l ${HOME}/dependencies
+
+set +e
